@@ -116,7 +116,7 @@ class Net(object):
         if not train_data.shape[0] % batch_size == 0:
             last_batch = train_data[start_index.pop():]
         batches = [train_data[i:i+batch_size] for i in start_index]
-        if last_batch:
+        if last_batch is not None:
             batches.append(last_batch)
 
         for i in range(epoch):
@@ -134,7 +134,7 @@ class Net(object):
                 self.bias = self.bias - learning_rate * np.average(dbs, 0)
 
                 if evaluate and i % 50 == 0:
-                    cost_train, accuracy_train = self.evaluate(images[:100], ys[:100])
+                    cost_train, accuracy_train = self.evaluate(images[:10000], ys[:10000])
                     self._monitor["cost_train"].append(cost_train)
                     self._monitor["accuracy_train"].append(accuracy_train)
 
@@ -193,6 +193,7 @@ class Net(object):
 
     def monitor(self):
         self.axe.clear()
+        self.axe.hlines(1, 0, len(self._monitor["cost_train"]))
         for key in self._monitor:
             self.axe.plot(self._monitor[key], label=key)
             self.axe.legend()
@@ -211,15 +212,15 @@ if __name__ == "__main__":
     else:
         net = Net()
 
-    # Training
-    try:
-        net.SGD(train_image, train_labels, learning_rate=0.01, epoch=10, valid_images=valid_images, valid_y=valid_labels)
-    except KeyboardInterrupt:
-        print("Exit...")
-        net.save("net.pkl")
-        plt.show()
+    # # Training
+    # try:
+    #     net.SGD(train_image, train_labels, learning_rate=0.75, batch_size=30, epoch=10, valid_images=valid_images, valid_y=valid_labels)
+    # except KeyboardInterrupt:
+    #     print("Exit...")
+    #     net.save("net.pkl")
+    #     plt.show()
 
-    # # Testing
-    # net = Net.load("net.pkl")
-    # for i in range(10):
-    #     net.predict(cross_image[i], show_img=True)
+    # Testing
+    net = Net.load("net.pkl")
+    for i in range(10):
+        net.predict(valid_images[i], show_img=True)
