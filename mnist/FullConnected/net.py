@@ -1,11 +1,11 @@
 #encoding:utf8
 import pickle
 import os
-import sys
+import atexit
 import numpy as np
 from load_mnist import load_train_images, load_train_labels
 from numpy import newaxis
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, animation
 from activations import Sigmoid
 from normalizer import gaussian
 
@@ -31,6 +31,17 @@ class Net(object):
 
         self.weights = [np.random.randn(row, col) for row, col in zip(self.shape[1:], self.shape[:-1])]
         self.bias = [np.random.randn(i) for i in self.shape[1:]]
+
+        # To track training process
+        plt.ion()
+        self._monitor = {
+            "cost_train":[],
+            "accuracy_train":[],
+            "cost_valid": [],
+            "accuracy_valid": [],
+        }
+        self.figure = plt.figure()
+        self.axe = self.figure.add_subplot(1,1,1)
 
     @staticmethod
     def _y2i(y):
@@ -89,7 +100,7 @@ class Net(object):
         dc_over_db = [error for error in errors]
         return dc_over_dw, dc_over_db
 
-    def SGD(self, images, ys, batch_size=10, learning_rate=1, epoch=1, evaluate=True, cross_images=None, cross_ys=None):
+    def SGD(self, images, ys, batch_size=10, learning_rate=1, epoch=1, evaluate=True, valid_images=None, valid_y=None):
         '''
         :param images: 2D
         :param ys: [1,3,0]
@@ -108,9 +119,6 @@ class Net(object):
         if last_batch:
             batches.append(last_batch)
 
-        cross_images = images if cross_images is None else cross_images
-        cross_labels = ys if cross_ys is None else cross_ys
-
         for i in range(epoch):
             for i, batch in enumerate(batches):
                 dws = []
@@ -126,7 +134,15 @@ class Net(object):
                 self.bias = self.bias - learning_rate * np.average(dbs, 0)
 
                 if evaluate and i % 50 == 0:
-                    self.evaluate(cross_images, cross_labels)
+                    cost_train, accuracy_train = self.evaluate(images[:100], ys[:100])
+                    self._monitor["cost_train"].append(cost_train)
+                    self._monitor["accuracy_train"].append(accuracy_train)
+
+                    if valid_images is not None:
+                        cost, accuracy = self.evaluate(valid_images, valid_labels)
+                        self._monitor["cost_valid"].append(cost)
+                        self._monitor["accuracy_valid"].append(accuracy)
+                    self.monitor()
 
         return batches
 
@@ -163,7 +179,6 @@ class Net(object):
         accuracy = [1 if predicted==true_class else 0 for predicted, true_class in zip(predicted_class, y)]
         accuracy = float(np.sum(accuracy))/len(accuracy)
         print("Accuracy: {}".format(accuracy))
-
         return cost, accuracy
 
     def save(self, filename):
@@ -176,26 +191,35 @@ class Net(object):
             net = pickle.loads(f.read())
         return net
 
+    def monitor(self):
+        self.axe.clear()
+        for key in self._monitor:
+            self.axe.plot(self._monitor[key], label=key)
+            self.axe.legend()
+        plt.pause(0.1)
+        return self.axe
+
+
 if __name__ == "__main__":
     images = load_train_images()
     labels = load_train_labels()
     train_image, train_labels = images[:50000], labels[:50000]
-    cross_image, cross_labels = images[50000:], labels[50000:]
+    valid_images, valid_labels = images[50000:], labels[50000:]
 
     if os.path.exists(os.path.abspath("net.pkl")):
         net = Net.load("net.pkl")
     else:
         net = Net()
 
-    # # Training
-    # try:
-    #     net.SGD(train_image, train_labels, learning_rate=0.01, epoch=10, cross_images=cross_image, cross_ys=cross_labels)
-    # except KeyboardInterrupt:
-    #     net.save("net.pkl")
-    #     print("Exit")
-    #     sys.exit(0)
+    # Training
+    try:
+        net.SGD(train_image, train_labels, learning_rate=0.01, epoch=10, valid_images=valid_images, valid_y=valid_labels)
+    except KeyboardInterrupt:
+        print("Exit...")
+        net.save("net.pkl")
+        plt.show()
 
-    # Testing
-    net = Net.load("net.pkl")
-    for i in range(10):
-        net.predict(cross_image[i], show_img=True)
+    # # Testing
+    # net = Net.load("net.pkl")
+    # for i in range(10):
+    #     net.predict(cross_image[i], show_img=True)
